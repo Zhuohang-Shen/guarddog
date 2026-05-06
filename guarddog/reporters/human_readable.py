@@ -6,7 +6,6 @@ from typing import List
 from guarddog.scanners.scanner import DependencyFile
 from guarddog.ecosystems import ECOSYSTEM
 
-
 # C0 controls except \n (0x0a) and \t (0x09); DEL (0x7f); C1 controls (0x80-0x9f).
 # Attacker-controlled values (file paths, code snippets, messages, identifiers)
 # may contain these bytes; rendering them raw would let a malicious package
@@ -15,9 +14,7 @@ _TERMINAL_CONTROL_RE = re.compile(r"[\x00-\x08\x0b-\x1f\x7f-\x9f]")
 
 
 def _sanitize(value: object) -> str:
-    return _TERMINAL_CONTROL_RE.sub(
-        lambda m: f"\\x{ord(m.group(0)):02x}", str(value)
-    )
+    return _TERMINAL_CONTROL_RE.sub(lambda m: f"\\x{ord(m.group(0)):02x}", str(value))
 
 
 class HumanReadableReporter(BaseReporter):
@@ -35,7 +32,9 @@ class HumanReadableReporter(BaseReporter):
         lines.append("")
         lines.append(
             colored(
-                "Some rules failed to run while scanning " + _sanitize(identifier) + ":",
+                "Some rules failed to run while scanning "
+                + _sanitize(identifier)
+                + ":",
                 "yellow",
             )
         )
