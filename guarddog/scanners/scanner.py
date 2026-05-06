@@ -42,9 +42,7 @@ def _build_raw_github_url(url: str, branch: str, requirements_name: str) -> str:
     path = parsed.path.strip("/").removesuffix(".git")
     parts = path.split("/")
     if len(parts) != 2 or not all(parts):
-        raise ValueError(
-            f"GitHub repo URL must be of the form owner/repo: {url!r}"
-        )
+        raise ValueError(f"GitHub repo URL must be of the form owner/repo: {url!r}")
     owner, repo = parts
 
     quoted_branch = quote(branch, safe="/")
