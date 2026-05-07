@@ -1,6 +1,7 @@
 import re
 
 from guarddog.reporters.human_readable import HumanReadableReporter, _sanitize
+from guarddog.ecosystems import ECOSYSTEM
 
 # Strips ANSI SGR/CSI/OSC sequences emitted by termcolor so assertions can match
 # the underlying text instead of color codes.
@@ -157,3 +158,78 @@ def test_print_scan_results_benign_input_is_preserved():
     assert "matched a benign-looking pattern" in plain
     assert "requests" in plain
     assert "rule-name" in plain
+
+
+def test_pypi_inspector_link_shown_for_remote_pypi_with_issues():
+    results = {
+        "issues": 1,
+        "errors": {},
+        "results": {
+            "some-rule": "found suspicious behavior"
+        },
+        "is_remote": True,
+        "ecosystem": ECOSYSTEM.PYPI,
+        "scanned_version": "2.28.1"
+    }
+    out = HumanReadableReporter.print_scan_results("requests", results)
+    plain = _strip_color(out)
+    assert "https://inspector.pypi.io/project/requests/2.28.1" in plain
+
+
+def test_pypi_inspector_link_not_shown_for_local_scan():
+    results = {
+        "issues": 1,
+        "errors": {},
+        "results": {
+            "some-rule": "found suspicious behavior"
+        }
+    }
+    out = HumanReadableReporter.print_scan_results("requests", results)
+    plain = _strip_color(out)
+    assert "inspector.pypi.io" not in plain
+
+
+def test_pypi_inspector_link_not_shown_when_no_issues():
+    results = {
+        "issues": 0,
+        "errors": {},
+        "results": {},
+        "is_remote": True,
+        "ecosystem": ECOSYSTEM.PYPI,
+        "scanned_version": "2.28.1"
+    }
+    out = HumanReadableReporter.print_scan_results("requests", results)
+    plain = _strip_color(out)
+    assert "inspector.pypi.io" not in plain
+
+
+def test_pypi_inspector_link_not_shown_for_npm():
+    results = {
+        "issues": 1,
+        "errors": {},
+        "results": {
+            "some-rule": "found suspicious behavior"
+        },
+        "is_remote": True,
+        "ecosystem": ECOSYSTEM.NPM,
+        "scanned_version": "1.0.0"
+    }
+    out = HumanReadableReporter.print_scan_results("lodash", results)
+    plain = _strip_color(out)
+    assert "inspector.pypi.io" not in plain
+
+
+def test_pypi_inspector_link_not_shown_when_version_is_none():
+    results = {
+        "issues": 1,
+        "errors": {},
+        "results": {
+            "some-rule": "found suspicious behavior"
+        },
+        "is_remote": True,
+        "ecosystem": ECOSYSTEM.PYPI,
+        "scanned_version": None
+    }
+    out = HumanReadableReporter.print_scan_results("requests", results)
+    plain = _strip_color(out)
+    assert "inspector.pypi.io" not in plain

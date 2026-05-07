@@ -110,6 +110,16 @@ class HumanReadableReporter(BaseReporter):
                         )
                     lines.append("")
 
+        if (
+            num_issues > 0
+            and results.get("is_remote")
+            and results.get("ecosystem") == ECOSYSTEM.PYPI
+        ):
+            scanned_version = results.get("scanned_version")
+            if scanned_version:
+                inspector_url = f"https://inspector.pypi.io/project/{safe_identifier}/{scanned_version}"
+                lines.append(f"For more details, see: {inspector_url}")
+
         return "\n".join(lines)
 
     @staticmethod

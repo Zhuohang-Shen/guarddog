@@ -218,6 +218,19 @@ def _scan(
         else:
             log.debug(f"Considering that '{identifier}' is a remote target")
             result |= scanner.scan_remote(identifier, version, rule_param)
+
+            scanned_version = version
+            if version is None and ecosystem == ECOSYSTEM.PYPI:
+                from guarddog.utils.package_info import get_package_info
+                try:
+                    package_info = get_package_info(identifier)
+                    scanned_version = package_info["info"]["version"]
+                except Exception:
+                    pass
+
+            result["is_remote"] = True
+            result["ecosystem"] = ecosystem
+            result["scanned_version"] = scanned_version
     except Exception as e:
         log.error(f"Error occurred while scanning target {identifier}: '{e}'\n")
         sys.exit(1)
