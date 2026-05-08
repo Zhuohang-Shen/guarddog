@@ -1,9 +1,21 @@
+import re
+
 from termcolor import colored
 from guarddog.reporters import BaseReporter
 from typing import List
 from guarddog.scanners.scanner import DependencyFile
 from guarddog.ecosystems import ECOSYSTEM
 from collections import defaultdict
+
+# C0 controls except \n (0x0a) and \t (0x09); DEL (0x7f); C1 controls (0x80-0x9f).
+# Attacker-controlled values (file paths, code snippets, messages, identifiers)
+# may contain these bytes; rendering them raw would let a malicious package
+# inject ANSI/OSC sequences into analyst terminals or CI logs.
+_TERMINAL_CONTROL_RE = re.compile(r"[\x00-\x08\x0b-\x1f\x7f-\x9f]")
+
+
+def _sanitize(value: object) -> str:
+    return _TERMINAL_CONTROL_RE.sub(lambda m: f"\\x{ord(m.group(0)):02x}", str(value))
 
 
 class HumanReadableReporter(BaseReporter):
@@ -21,13 +33,15 @@ class HumanReadableReporter(BaseReporter):
         lines.append("")
         lines.append(
             colored(
-                "Some rules failed to run while scanning " + identifier + ":",
+                "Some rules failed to run while scanning "
+                + _sanitize(identifier)
+                + ":",
                 "yellow",
             )
         )
         lines.append("")
         for rule in errors:
-            lines.append(f"* {rule}: {errors[rule]}")
+            lines.append(f"* {_sanitize(rule)}: {_sanitize(errors[rule])}")
 
         return "\n".join(lines)
 
@@ -114,7 +128,7 @@ class HumanReadableReporter(BaseReporter):
 
                     tactic_risks = tactics_to_risks[tactic]
                     lines.append(
-                        colored(f"{tactic}-risk", "red", attrs=["bold"])
+                        colored(f"{_sanitize(tactic)}-risk", "red", attrs=["bold"])
                         + f": Found {len(tactic_risks)} issue(s)"
                     )
 
@@ -129,23 +143,23 @@ class HumanReadableReporter(BaseReporter):
 
                         # Format location
                         location_str = (
-                            f" at {threat_loc}"
+                            f" at {_sanitize(threat_loc)}"
                             if threat_loc
-                            else f" in {risk['file_path']}"
+                            else f" in {_sanitize(risk['file_path'])}"
                         )
 
                         lines.append(
-                            f"  * {colored(threat_identifies, None, attrs=['bold'])}: "
-                            f"{threat_desc}{location_str}"
+                            f"  * {colored(_sanitize(threat_identifies), None, attrs=['bold'])}: "
+                            f"{_sanitize(threat_desc)}{location_str}"
                         )
 
                         # Show matched code if available
                         if threat_code:
-                            code_display = threat_code.strip()
-                            if isinstance(code_display, bytes):
-                                code_display = code_display.decode(
+                            if isinstance(threat_code, bytes):
+                                threat_code = threat_code.decode(
                                     "utf-8", errors="replace"
                                 )
+                            code_display = _sanitize(threat_code).strip()
                             lines.append(
                                 f"     {colored(code_display, None, 'on_red', attrs=['bold'])}"
                             )
@@ -154,7 +168,7 @@ class HumanReadableReporter(BaseReporter):
                         cap_identifies = risk.get("capability_identifies")
                         if cap_identifies:
                             lines.append(
-                                f"    (enabled by {colored(cap_identifies, 'yellow')})"
+                                f"    (enabled by {colored(_sanitize(cap_identifies), 'yellow')})"
                             )
 
                     lines.append("")  # Space between tactics
@@ -166,16 +180,40 @@ class HumanReadableReporter(BaseReporter):
 
         def _format_code_line_for_output(code) -> str:
             return "    " + colored(
-                code.strip().replace("\n", "\n    ").replace("\t", "  "),
+                _sanitize(code).strip().replace("\n", "\n    ").replace("\t", "  "),
                 None,
                 "on_red",
                 attrs=["bold"],
             )
 
         num_issues = results.get("issues", 0)
+        safe_identifier = _sanitize(identifier)
         lines = []
 
-        # Always show risk score
+        # Header — always shown so the identifier and indicator count are visible
+        # even when there is no risk score or findings to render below.
+        if num_issues == 0:
+            lines.append(
+                "Found "
+                + colored("0 potentially malicious indicators", "green", attrs=["bold"])
+                + " scanning "
+                + colored(safe_identifier, None, attrs=["bold"])
+            )
+            lines.append("")
+        else:
+            lines.append(
+                "Found "
+                + colored(
+                    str(num_issues) + " potentially malicious indicators",
+                    "red",
+                    attrs=["bold"],
+                )
+                + " in "
+                + colored(safe_identifier, None, attrs=["bold"])
+            )
+            lines.append("")
+
+        # Show risk score summary when available
         risk_score = results.get("risk_score")
         risks = results.get("risks", [])
         has_risks = bool(risks)
@@ -204,22 +242,30 @@ class HumanReadableReporter(BaseReporter):
         }
 
         if other_findings:
-            lines.append("")
-            lines.append(colored("═" * 70, "cyan"))
-            lines.append(colored("OTHER INDICATORS", "cyan", attrs=["bold"]))
-            lines.append("")
+            # Only emit the OTHER INDICATORS section header when we already
+            # showed a risk-score block above; without that context the bare
+            # findings list reads more naturally as a continuation of the
+            # header line.
+            if risk_score:
+                lines.append("")
+                lines.append(colored("═" * 70, "cyan"))
+                lines.append(colored("OTHER INDICATORS", "cyan", attrs=["bold"]))
+                lines.append("")
 
             for rule_name in other_findings:
                 description = other_findings[rule_name]
+                safe_rule_name = _sanitize(rule_name)
                 if isinstance(description, str):  # package metadata
                     lines.append(
-                        colored(rule_name, None, attrs=["bold"]) + ": " + description
+                        colored(safe_rule_name, None, attrs=["bold"])
+                        + ": "
+                        + _sanitize(description)
                     )
                     lines.append("")
                 elif isinstance(description, list):  # semgrep/yara rule result:
                     source_code_findings = description
                     lines.append(
-                        colored(rule_name, None, attrs=["bold"])
+                        colored(safe_rule_name, None, attrs=["bold"])
                         + ": found "
                         + str(len(source_code_findings))
                         + " source code matches"
@@ -227,16 +273,17 @@ class HumanReadableReporter(BaseReporter):
                     for finding in source_code_findings:
                         lines.append(
                             "  * "
-                            + finding["message"]
+                            + _sanitize(finding["message"])
                             + " at "
-                            + finding["location"]
+                            + _sanitize(finding["location"])
                             + "\n    "
                             + _format_code_line_for_output(finding["code"])
                         )
                     lines.append("")
 
-            lines.append(colored("═" * 70, "cyan"))
-            lines.append("")
+            if risk_score:
+                lines.append(colored("═" * 70, "cyan"))
+                lines.append("")
 
         return "\n".join(lines)
 
