@@ -127,9 +127,7 @@ def _get_all_rules(ecosystem: ECOSYSTEM) -> set[str]:
     )
 
 
-_GITHUB_BLOB_RE = re.compile(
-    r"^(https?://(?:www\.)?github\.com/[^/]+/[^/]+)/blob(/.*)"
-)
+_GITHUB_BLOB_RE = re.compile(r"^(https?://(?:www\.)?github\.com/[^/]+/[^/]+)/blob(/.*)")
 
 
 def _to_raw_github_url(url: str) -> str:
@@ -310,7 +308,9 @@ def _scan(
             with tempfile.TemporaryDirectory(dir=tmp_root) as tempdir:
                 # Download before sandbox: network access is needed here.
                 download_url = _to_raw_github_url(identifier)
-                filename = unquote(os.path.basename(urlparse(download_url).path)) or "archive"
+                filename = (
+                    unquote(os.path.basename(urlparse(download_url).path)) or "archive"
+                )
                 archive_path = os.path.join(tempdir, filename)
                 log.debug(f"Downloading remote archive from {download_url}")
                 response = requests.get(download_url, stream=True)
